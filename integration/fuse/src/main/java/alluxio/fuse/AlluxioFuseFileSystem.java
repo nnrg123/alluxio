@@ -267,17 +267,20 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
     final AlluxioURI uri = MetaCache.getURI(path);
     final int flags = (fi != null) ? fi.flags.get() : 0;
     LOG.trace("create({}, {}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
+    LOG.info("create({}, {}) [Alluxio: {}]", path, Integer.toHexString(flags), uri);
 
     try {
       synchronized (mOpenFiles) {
         if (mOpenFiles.size() >= MAX_OPEN_FILES) {
           LOG.error("Cannot open {}: too many open files (MAX_OPEN_FILES: {})", uri,
               MAX_OPEN_FILES);
+          
           return -ErrorCodes.EMFILE();
         }
 
         final OpenFileEntry ofe = new OpenFileEntry(null, mFileSystem.createFile(uri), fi);
         LOG.debug("Alluxio OutStream created for {}", path);
+        LOG.info("Alluxio OutStream created for {}", path);
         if (fi != null) {
             mOpenFiles.put(mNextOpenFileId, ofe);
             mCreateFiles.put(path, mNextOpenFileId);
@@ -596,7 +599,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
             while (rd >= 0 && nread < size) {
                 rd = oe.getIn().read(dest, nread, sz - nread);
                 if (rd >= 0) {
-                    nread += rd;
+                    nread += rd;         
                 }
             }
 
@@ -755,6 +758,7 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
   @Override
   public int release(String path, FuseFileInfo fi) {
     LOG.trace("release({})", path);
+    LOG.info("release({})", path);
     final long fd = fi.fh.get();
     OpenFileEntry oe;
     synchronized (mOpenFiles) {
@@ -943,9 +947,12 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
       return ErrorCodes.EIO();
     }
     LOG.trace("write({}, {}, {})", path, size, offset);
+    LOG.info("write({}, {}, {})", path, size, offset);
     final int sz = (int) size;
     final long fd = fi.fh.get();
     OpenFileEntry oe;
+    CountingRetry writeRetry = new CountingRetry(5);
+   // while(true){
     synchronized (mOpenFiles) {
       //oe = mOpenFiles.get(fd);
       oe = this.get_ofe(path, fd);
@@ -960,7 +967,8 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
           + " Please delete this file first.", path);
       return -ErrorCodes.EEXIST();
     }
-
+    LOG.info("***offset:{}:",offset);
+    LOG.info("oe.getWriteOffset():{}",oe.getWriteOffset());
     if (offset < oe.getWriteOffset()) {
       // no op
       return sz;
@@ -970,15 +978,23 @@ final class AlluxioFuseFileSystem extends FuseStubFS {
       final byte[] dest = new byte[sz];
       buf.get(0, dest, 0, sz);
       oe.getOut().write(dest);
+      // LOG.info("***oe.getOut:{}",oe.getOut());
       oe.setWriteOffset(offset + size);
+      // break;
     } catch (IOException e) {
       MetaCache.invalidate(path);
-      LOG.error("IOException while writing to {}.", path, e);
-      return -ErrorCodes.EIO();
-    }
-
+      LOG.error("IOException while writing to {}. error: {}", path, e);    
+      //if (writeRetry.attempt()) {
+      //  LOG.info("=== retrying {}: path:{} fd:{} ", writeRetry.getAttemptCount(), path, fd);
+        //oe.setWriteOffset(0);
+      //  continue;
+      return -ErrorCodes.EIO(); 
+      } 
+          
+    //}
     return sz;
   }
+    
 
   /**
    * Convenience internal method to remove files or directories.

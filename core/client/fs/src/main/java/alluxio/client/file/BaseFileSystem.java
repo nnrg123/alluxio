@@ -130,6 +130,7 @@ public class BaseFileSystem implements FileSystem {
           GetStatusOptions.defaults().setLoadMetadataType(LoadMetadataType.Never)
               .setCommonOptions(CommonOptions.defaults().setSyncIntervalMs(-1)));
       LOG.debug("Created file {}, options: {}", path.getPath(), options);
+      LOG.info("Created file {}, options: {}", path.getPath(), options);
     } catch (AlreadyExistsException e) {
       throw new FileAlreadyExistsException(e.getMessage());
     } catch (InvalidArgumentException e) {

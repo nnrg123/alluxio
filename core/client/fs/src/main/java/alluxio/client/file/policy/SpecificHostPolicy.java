@@ -42,7 +42,9 @@ public final class SpecificHostPolicy implements FileWriteLocationPolicy, BlockL
   @Override
   public WorkerNetAddress getWorkerForNextBlock(Iterable<BlockWorkerInfo> workerInfoList,
       long blockSizeBytes) {
+
     // find the first worker matching the host name
+    //LOG.info("www");
     for (BlockWorkerInfo info : workerInfoList) {
       if (info.getNetAddress().getHost().equals(mHostname)) {
         return info.getNetAddress();

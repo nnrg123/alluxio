@@ -43,7 +43,8 @@ public class BlockOutStream extends OutputStream implements BoundedStream, Cance
   private final Closer mCloser;
   /** Length of the stream. If unknown, set to Long.MAX_VALUE. */
   private final long mLength;
-  private final WorkerNetAddress mAddress;
+  //dai:wheather it can be setto static??
+  private static WorkerNetAddress mAddress;
   private ByteBuf mCurrentPacket = null;
 
   private final List<PacketWriter> mPacketWriters;
@@ -61,8 +62,12 @@ public class BlockOutStream extends OutputStream implements BoundedStream, Cance
    */
   public static BlockOutStream create(FileSystemContext context, long blockId, long blockSize,
       WorkerNetAddress address, OutStreamOptions options) throws IOException {
+        LOG.info("***BlockOutStream create---");
+        //add the address here!
+        mAddress=address;
     PacketWriter packetWriter =
         PacketWriter.Factory.create(context, blockId, blockSize, address, options);
+        LOG.info("***blockId:{} address:{} ",blockId, address);
     return new BlockOutStream(packetWriter, blockSize, address);
   }
 
@@ -74,8 +79,10 @@ public class BlockOutStream extends OutputStream implements BoundedStream, Cance
    * @param address the Alluxio worker address
    */
   protected BlockOutStream(PacketWriter packetWriter, long length, WorkerNetAddress address) {
+    LOG.info("***BlockOutStream construct??---");
     mCloser = Closer.create();
     mLength = length;
+    LOG.info("***address:{}",address);
     mAddress = address;
     mPacketWriters = new ArrayList<>(1);
     mPacketWriters.add(packetWriter);
@@ -112,19 +119,23 @@ public class BlockOutStream extends OutputStream implements BoundedStream, Cance
     if (len == 0) {
       return;
     }
-
     while (len > 0) {
       updateCurrentPacket(false);
       int toWrite = Math.min(len, mCurrentPacket.writableBytes());
+      LOG.info("***Before writeBytes---");
       mCurrentPacket.writeBytes(b, off, toWrite);
+      LOG.info("***After writeBytes---");
       off += toWrite;
       len -= toWrite;
     }
+    LOG.info("***BlockOutStream-----before updateCurrentPacket");
     updateCurrentPacket(false);
+    LOG.info("***BlockOutStream-----after updateCurrentPacket");
   }
 
   @Override
   public void flush() throws IOException {
+    LOG.info("***go into flush()");
     if (mClosed) {
       return;
     }
@@ -154,12 +165,12 @@ public class BlockOutStream extends OutputStream implements BoundedStream, Cance
     if (exception != null) {
       throw exception;
     }
-
     close();
   }
 
   @Override
   public void close() throws IOException {
+    LOG.info("***Go into close()---");
     if (mClosed) {
       return;
     }
@@ -180,6 +191,10 @@ public class BlockOutStream extends OutputStream implements BoundedStream, Cance
     return mAddress;
   }
 
+  public void setAddress(WorkerNetAddress address){
+    mAddress = address;
+  }
+
   /**
    * Updates the current packet.
    *
@@ -188,35 +203,46 @@ public class BlockOutStream extends OutputStream implements BoundedStream, Cance
   private void updateCurrentPacket(boolean lastPacket) throws IOException {
     // Early return for the most common case.
     if (mCurrentPacket != null && mCurrentPacket.writableBytes() > 0 && !lastPacket) {
+      LOG.info("***updateCurrentPacket---1");
       return;
     }
 
     if (mCurrentPacket == null) {
+      LOG.info("***updateCurrentPacket---2");
       if (!lastPacket) {
+        LOG.info("***updateCurrentPacket---3");
         mCurrentPacket = allocateBuffer();
       }
       return;
     }
 
     if (mCurrentPacket.writableBytes() == 0 || lastPacket) {
+      LOG.info("***updateCurrentPacket---4");
       try {
         if (mCurrentPacket.readableBytes() > 0) {
+          LOG.info("***updateCurrentPacket---5");
           for (PacketWriter packetWriter : mPacketWriters) {
             mCurrentPacket.retain();
+            LOG.info("***Before writePacket---");
             packetWriter.writePacket(mCurrentPacket.duplicate());
+            LOG.info("***After writePacket---");
           }
         } else {
+          LOG.info("***checkState(lastPacket)");
           Preconditions.checkState(lastPacket);
         }
       } finally {
         // If the packet has bytes to read, we increment its refcount explicitly for every packet
         // writer. So we need to release here. If the packet has no bytes to read, then it has
         // to be the last packet. It needs to be released as well.
+        LOG.info("***Before release");
         mCurrentPacket.release();
+        LOG.info("***After release");
         mCurrentPacket = null;
       }
     }
     if (!lastPacket) {
+      LOG.info("***if (!lastPacket)");
       mCurrentPacket = allocateBuffer();
     }
   }

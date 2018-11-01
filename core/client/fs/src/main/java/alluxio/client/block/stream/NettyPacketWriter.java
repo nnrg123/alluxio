@@ -48,6 +48,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.NotThreadSafe;
+import alluxio.retry.CountingRetry;
 
 /**
  * A netty packet writer that streams a full block or a UFS file to a netty data server.
@@ -120,13 +121,17 @@ public final class NettyPacketWriter implements PacketWriter {
    * @return an instance of {@link NettyPacketWriter}
    */
   public static NettyPacketWriter create(FileSystemContext context, WorkerNetAddress address,
-      long id, long length, Protocol.RequestType type, OutStreamOptions options)
-      throws IOException {
+      long id, long length, Protocol.RequestType type, OutStreamOptions options)throws IOException{ 
+    LOG.info("***NettyPacketWriter create -1");
     long packetSize =
         Configuration.getBytes(PropertyKey.USER_NETWORK_NETTY_WRITER_PACKET_SIZE_BYTES);
-    Channel nettyChannel = context.acquireNettyChannel(address);
-    return new NettyPacketWriter(context, address, id, length, packetSize, type, options,
-        nettyChannel);
+
+      LOG.info("***Channel worker address:{}",address);
+      Channel nettyChannel = context.acquireNettyChannel(address);
+      LOG.info("***Get channel successfully!------------"); 
+      return new NettyPacketWriter(context, address, id, length, packetSize, type, options,
+      nettyChannel);       
+
   }
 
   /**
@@ -144,6 +149,7 @@ public final class NettyPacketWriter implements PacketWriter {
   private NettyPacketWriter(FileSystemContext context, final WorkerNetAddress address, long id,
       long length, long packetSize, Protocol.RequestType type, OutStreamOptions options,
       Channel channel) {
+    LOG.info("*** Go into NettyPacketWriter");
     mContext = context;
     mAddress = address;
     mLength = length;
@@ -160,6 +166,7 @@ public final class NettyPacketWriter implements PacketWriter {
     mPacketSize = packetSize;
     mChannel = channel;
     mChannel.pipeline().addLast(new PacketWriteResponseHandler());
+    LOG.info("*** After go into NettyPacketWriter");
   }
 
   @Override
@@ -177,11 +184,14 @@ public final class NettyPacketWriter implements PacketWriter {
       Preconditions.checkState(!mClosed && !mEOFSent && !mCancelSent);
       Preconditions.checkArgument(buf.readableBytes() <= mPacketSize);
       while (true) {
+        LOG.info("***Go into writePacket-----");
         if (mPacketWriteException != null) {
+          LOG.info("***if (mPacketWriteException != null)");
           Throwables.propagateIfPossible(mPacketWriteException, IOException.class);
           throw AlluxioStatusException.fromCheckedException(mPacketWriteException);
         }
         if (!tooManyPacketsInFlight()) {
+          LOG.info("***if (!tooManyPacketsInFlight())");
           offset = mPosToQueue;
           mPosToQueue += buf.readableBytes();
           len = buf.readableBytes();
@@ -202,12 +212,16 @@ public final class NettyPacketWriter implements PacketWriter {
       buf.release();
       throw e;
     }
-
     Protocol.WriteRequest writeRequest = mPartialRequest.toBuilder().setOffset(offset).build();
+    LOG.info("***after writeRequest---");
     DataBuffer dataBuffer = new DataNettyBufferV2(buf);
+    LOG.info("***Before writeAndFlush");
+
     mChannel.writeAndFlush(new RPCProtoMessage(new ProtoMessage(writeRequest), dataBuffer))
-        .addListener(new WriteListener(offset + len));
-  }
+    .addListener(new WriteListener(offset + len));
+    LOG.info("***After writeAndFlush");
+       
+    }
 
   @Override
   public void cancel() {
@@ -220,7 +234,7 @@ public final class NettyPacketWriter implements PacketWriter {
   @Override
   public void flush() throws IOException {
     mChannel.flush();
-
+    LOG.info("***Go into flush()----when to flush???");
     try (LockResource lr = new LockResource(mLock)) {
       while (true) {
         if (mPosToWrite == mPosToQueue) {
@@ -232,7 +246,8 @@ public final class NettyPacketWriter implements PacketWriter {
         }
         if (!mBufferEmptyOrFailed.await(WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
           throw new DeadlineExceededException(
-              String.format("Timeout flushing to %s for request %s after %dms.",
+    
+          String.format("Timeout flushing to %s for request %s after %dms.",
                   mAddress, mPartialRequest, WRITE_TIMEOUT_MS));
         }
       }
@@ -247,7 +262,7 @@ public final class NettyPacketWriter implements PacketWriter {
     if (mClosed) {
       return;
     }
-
+    LOG.info("***Go into close()----");
     sendEof();
     Future<?> closeFuture = null;
     mLock.lock();
@@ -257,6 +272,7 @@ public final class NettyPacketWriter implements PacketWriter {
           return;
         }
         try {
+          LOG.info("mPacketWriteException:{}",mPacketWriteException);
           if (mPacketWriteException != null) {
             closeFuture = mChannel.eventLoop().submit(new Runnable() {
               @Override
@@ -264,6 +280,7 @@ public final class NettyPacketWriter implements PacketWriter {
                 mChannel.close();
               }
             });
+            LOG.info("***closeFuture:{}",closeFuture);
             throw new UnavailableException(
                 "Failed to write data packet due to " + mPacketWriteException.getMessage(),
                 mPacketWriteException);
@@ -374,6 +391,7 @@ public final class NettyPacketWriter implements PacketWriter {
      * Default constructor.
      */
     PacketWriteResponseHandler() {}
+    
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws IOException {
@@ -437,16 +455,19 @@ public final class NettyPacketWriter implements PacketWriter {
    */
   private final class WriteListener implements ChannelFutureListener {
     private final long mPosToWriteUncommitted;
+   
 
     /**
      * @param posToWriteUncommitted the pos to commit (i.e. update mPosToWrite)
      */
     WriteListener(long posToWriteUncommitted) {
+      LOG.info("***Go into WriteListener");
       mPosToWriteUncommitted = posToWriteUncommitted;
     }
 
     @Override
     public void operationComplete(ChannelFuture future) {
+      LOG.info("***Go into operationComplete");
       if (!future.isSuccess()) {
         future.channel().close();
       }

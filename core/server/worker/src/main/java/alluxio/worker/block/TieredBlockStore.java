@@ -311,6 +311,8 @@ public class TieredBlockStore implements BlockStore {
       throws BlockDoesNotExistException, WorkerOutOfSpaceException, IOException {
     LOG.debug("requestSpace: sessionId={}, blockId={}, additionalBytes={}",
         sessionId, blockId, additionalBytes);
+    LOG.info("requestSpace: sessionId={}, blockId={}, additionalBytes={}",
+        sessionId, blockId, additionalBytes);
     if (RESERVER_ENABLED) {
       RetryPolicy retryPolicy = new TimeoutRetry(FREE_SPACE_TIMEOUT_MS, EVICTION_INTERVAL_MS);
       while (retryPolicy.attempt()) {

@@ -291,6 +291,8 @@ public final class AlluxioBlockStore {
     }
     LOG.debug("Create block outstream for {} of block size {} at address {}, using options: {}",
         blockId, blockSize, address, options);
+    LOG.info("Create block outstream for {} of block size {} at address {}, using options: {}",
+        blockId, blockSize, address, options);
     return BlockOutStream.create(mContext, blockId, blockSize, address, options);
   }
 
@@ -311,12 +313,36 @@ public final class AlluxioBlockStore {
     FileWriteLocationPolicy locationPolicy = Preconditions.checkNotNull(options.getLocationPolicy(),
         PreconditionMessage.FILE_WRITE_LOCATION_POLICY_UNSPECIFIED);
     address = locationPolicy.getWorkerForNextBlock(getEligibleWorkers(), blockSize);
+    LOG.info("***address:{}",address);
     if (address == null) {
       throw new UnavailableException(
           ExceptionMessage.NO_SPACE_FOR_BLOCK_ON_WORKER.getMessage(blockSize));
     }
     return getOutStream(blockId, blockSize, address, options);
   }
+
+  public BlockOutStream getOutStreamChooseAddress(long blockId, long blockSize, OutStreamOptions options,
+  WorkerNetAddress addressBefore)
+  throws IOException {
+   // WorkerNetAddress address;
+    FileWriteLocationPolicy locationPolicy = Preconditions.checkNotNull(options.getLocationPolicy(),
+        PreconditionMessage.FILE_WRITE_LOCATION_POLICY_UNSPECIFIED);
+        WorkerNetAddress address;
+    address = locationPolicy.getWorkerForNextBlock(getEligibleWorkers(), blockSize);
+    LOG.info("***Before address:{}",address);
+    while(address.equals(addressBefore)){
+        LOG.info("while loop addressBefore:{}",addressBefore);
+        LOG.info("while loop address:{}",address);
+        address = locationPolicy.getWorkerForNextBlock(getEligibleWorkers(), blockSize);
+        LOG.info("while loop address:{}",address);
+    }
+    LOG.info("***getOutStreamChooseAddress address:{}",address);
+    if (address == null) {
+      throw new UnavailableException(
+          ExceptionMessage.NO_SPACE_FOR_BLOCK_ON_WORKER.getMessage(blockSize));
+    }
+    return getOutStream(blockId, blockSize, address, options);
+}
 
   /**
    * Gets the total capacity of Alluxio's BlockStore.

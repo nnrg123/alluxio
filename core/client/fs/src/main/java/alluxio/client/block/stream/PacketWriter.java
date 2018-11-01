@@ -63,6 +63,8 @@ public interface PacketWriter extends Closeable, Cancelable {
       } else {
         LOG.debug("Creating netty output stream for block {} @ {} from client {}", blockId, address,
             NetworkAddressUtils.getClientHostName());
+        LOG.info("Creating netty output stream for block {} @ {} from client {}", blockId, address,
+            NetworkAddressUtils.getClientHostName());
         return NettyPacketWriter
             .create(context, address, blockId, blockSize, Protocol.RequestType.ALLUXIO_BLOCK,
                 options);

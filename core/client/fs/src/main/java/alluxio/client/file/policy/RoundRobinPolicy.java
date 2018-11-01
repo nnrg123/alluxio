@@ -25,6 +25,8 @@ import java.util.List;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A policy that chooses the worker for the next block in a round-robin manner and skips workers
@@ -38,6 +40,7 @@ public final class RoundRobinPolicy implements FileWriteLocationPolicy, BlockLoc
   private boolean mInitialized = false;
   /** This caches the {@link WorkerNetAddress} for the block IDs.*/
   private final HashMap<Long, WorkerNetAddress> mBlockLocationCache = new HashMap<>();
+  private static final Logger LOG = LoggerFactory.getLogger(RoundRobinPolicy.class);
 
   /**
    * Constructs a new {@link RoundRobinPolicy}.
@@ -58,6 +61,7 @@ public final class RoundRobinPolicy implements FileWriteLocationPolicy, BlockLoc
   @Nullable
   public WorkerNetAddress getWorkerForNextBlock(Iterable<BlockWorkerInfo> workerInfoList,
       long blockSizeBytes) {
+    LOG.info("***RoundRobin Policy:");
     if (!mInitialized) {
       mWorkerInfoList = Lists.newArrayList(workerInfoList);
       Collections.shuffle(mWorkerInfoList);
